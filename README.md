@@ -1,4 +1,5 @@
-# 😄 Face Expression Analyzer  
+# Face-Expression-Analyzer
+
 ### Real-Time Facial Expression Detection using Python & Computer Vision
 
 Face Expression Analyzer is a **computer vision based project** that detects **human faces** from a live camera feed and analyzes **facial expressions/emotions** such as **Happy, Sad, Angry, Neutral**, etc.  
