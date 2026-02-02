@@ -1,0 +1,146 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Cyberpunk Selfie Emotion HUD</title>
+
+<!-- Vladmandic face-api for accurate detection -->
+<script src="https://cdn.jsdelivr.net/npm/@vladmandic/face-api/dist/face-api.min.js"></script>
+
+<style>
+body { margin:0; background:#0a0a0a; overflow:hidden; font-family:Arial; color:#0ff; text-align:center; }
+video, canvas { position:absolute; top:0; left:0; width:100vw; height:100vh; object-fit:cover; transform:scaleX(-1); }
+#emotion { position:absolute; bottom:20px; width:100%; text-align:center; font-size:28px; text-shadow:0 0 10px #0ff, 0 0 20px #0ff; z-index:10; }
+#fps { position:absolute; top:5px; right:10px; color:#0ff; font-size:18px; text-shadow:0 0 5px #0ff; z-index:10; }
+</style>
+</head>
+<body>
+
+<video id="video" autoplay muted playsinline></video>
+<canvas id="canvas"></canvas>
+<div id="emotion">Emotion: —</div>
+<div id="fps">FPS: 0</div>
+
+<script>
+const video = document.getElementById('video');
+const canvas = document.getElementById('canvas');
+const ctx = canvas.getContext('2d');
+const emotionDiv = document.getElementById('emotion');
+const fpsDiv = document.getElementById('fps');
+
+const colors = {
+  happy:"rgb(0,255,0)",
+  sad:"rgb(255,0,0)",
+  angry:"rgb(255,165,0)",
+  surprised:"rgb(0,255,255)",
+  neutral:"white",
+  fearful:"rgb(128,0,128)",
+  disgusted:"rgb(0,128,0)"
+};
+
+const emojis = {
+  happy:"😄", sad:"😢", angry:"😡", surprised:"😯", neutral:"😐", fearful:"😨", disgusted:"🤢"
+};
+
+let lastBox = null;
+let smoothFactor = 0.2;
+let lastTime = Date.now();
+let fps = 0;
+
+// Confetti setup
+let confetti = [];
+function addConfetti(x, y, color){
+  confetti.push({x,y,dx:(Math.random()-0.5)*2, dy:Math.random()*-4, r:Math.random()*5+2, color});
+}
+function updateConfetti(){
+  for(let i=confetti.length-1;i>=0;i--){
+    const c=confetti[i];
+    c.x+=c.dx; c.y+=c.dy; c.dy+=0.1;
+    ctx.fillStyle=c.color;
+    ctx.beginPath();
+    ctx.arc(c.x,c.y,c.r,0,2*Math.PI);
+    ctx.fill();
+    if(c.y>canvas.height) confetti.splice(i,1);
+  }
+}
+
+async function init(){
+  // Load models from CDN
+  await faceapi.nets.tinyFaceDetector.loadFromUri('https://cdn.jsdelivr.net/npm/@vladmandic/face-api/model/');
+  await faceapi.nets.faceExpressionNet.loadFromUri('https://cdn.jsdelivr.net/npm/@vladmandic/face-api/model/');
+
+  // Front camera
+  const stream = await navigator.mediaDevices.getUserMedia({ video:{ facingMode:"user" }});
+  video.srcObject = stream;
+
+  video.addEventListener('play',()=>{
+    canvas.width = video.videoWidth;
+    canvas.height = video.videoHeight;
+    detectLoop();
+  });
+}
+
+async function detectLoop(){
+  ctx.clearRect(0,0,canvas.width,canvas.height);
+  ctx.drawImage(video,0,0,canvas.width,canvas.height);
+
+  const res = await faceapi.detectSingleFace(video,new faceapi.TinyFaceDetectorOptions({ inputSize:320, scoreThreshold:0.5 }))
+                          .withFaceExpressions();
+
+  if(res){
+    const box = res.detection.box;
+    const expressions = res.expressions;
+    const sorted = Object.entries(expressions).sort((a,b)=>b[1]-a[1]);
+    const vibe = sorted[0][0];
+    const conf = (sorted[0][1]*100).toFixed(1);
+    const col = colors[vibe] || "white";
+    const emoji = emojis[vibe] || "😐";
+
+    if(!lastBox) lastBox=box;
+    lastBox.x += (box.x - lastBox.x)*smoothFactor;
+    lastBox.y += (box.y - lastBox.y)*smoothFactor;
+    lastBox.width += (box.width - lastBox.width)*smoothFactor;
+    lastBox.height += (box.height - lastBox.height)*smoothFactor;
+
+    // Neon box
+    ctx.strokeStyle = col;
+    ctx.lineWidth = 4;
+    ctx.shadowColor = col;
+    ctx.shadowBlur = 20;
+    ctx.strokeRect(lastBox.x,lastBox.y,lastBox.width,lastBox.height);
+    ctx.shadowBlur = 0;
+
+    // Background HUD
+    ctx.fillStyle="rgba(0,0,0,0.6)";
+    ctx.fillRect(lastBox.x,lastBox.y-45,lastBox.width,45);
+
+    // Text + Emoji
+    ctx.fillStyle = col;
+    ctx.font="28px Arial";
+    ctx.fillText(`${vibe.toUpperCase()} ${emoji} (${conf}%)`, lastBox.x+10,lastBox.y-12);
+
+    // Update main div
+    emotionDiv.innerText = `Emotion: ${vibe.toUpperCase()} ${emoji} (${conf}%)`;
+
+    // Confetti for happy
+    if(vibe=="happy"){
+      for(let i=0;i<5;i++) addConfetti(lastBox.x+lastBox.width/2,lastBox.y,lastBox.strokeStyle||col);
+    }
+  }
+
+  // Update FPS
+  const now = Date.now();
+  fps = Math.round(1000/(now-lastTime));
+  lastTime = now;
+  fpsDiv.innerText = `FPS: ${fps}`;
+
+  // Draw confetti
+  updateConfetti();
+
+  requestAnimationFrame(detectLoop);
+}
+
+init();
+</script>
+</body>
+</html>
