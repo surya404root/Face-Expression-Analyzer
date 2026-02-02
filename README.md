@@ -1,4 +1,4 @@
-# Face-Expression-Analyzer
+# 😀 Face-Expression-Analyzer
 
 ### Real-Time Facial Expression Detection using Python & Computer Vision
 
